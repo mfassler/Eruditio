@@ -22,10 +22,10 @@
 
 import time, sys, os
 import numpy as np
+import scipy.optimize as sciOpt
 import scipy.io as sio
 
 from flattenUtils import *
-import minimize as cg
 from backprop import backprop, backprop_only3
 
 
@@ -151,7 +151,10 @@ class LogisticHinton2006:
         #### Flatten all of our parameters into a 1-D array
         (VV, Dim) = multiFlatten(( self.W[3], self.hB[3] ))
 
-        (X, fX, iters) = cg.minimize(VV, backprop_only3, (Dim, layer2out, targets), max_iter)
+        mOpts = {"maxiter": max_iter}
+        optRes = sciOpt.minimize(backprop_only3, VV, args=(Dim, layer2out, targets), method="l-bfgs-b", options=mOpts, jac=True)
+        X = optRes.x
+        #iters = optRes.nit #unused
 
         #### Un-Flatten all of our parameters from the 1-D array
         matrices = multiUnFlatten(X, Dim)
@@ -166,7 +169,10 @@ class LogisticHinton2006:
                                     self.W[2], self.hB[2],
                                     self.W[3], self.hB[3]  ))
 
-        (X, fX, iters) = cg.minimize(VV, backprop, (Dim, inputData, targets), max_iter)
+        mOpts = {"maxiter": max_iter}
+        optRes = sciOpt.minimize(backprop, VV, args=(Dim, inputData, targets), method="l-bfgs-b", options=mOpts, jac=True)
+        X = optRes.x
+        #iters = optRes.nit #unused
 
         #### Un-Flatten all of our parameters from the 1-D array
         matrices = multiUnFlatten(X, Dim)

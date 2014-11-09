@@ -14,7 +14,7 @@ def multiFlatten(matrices):
     Dim = []
     for matrix in matrices:
         Dim.append(matrix.shape)
-    return VV, Dim
+    return VV.flatten(), Dim
 
 
 def multiUnFlatten(VV, Dim):

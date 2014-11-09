@@ -111,9 +111,10 @@ print "  Counting the number of mis-classifications in the training set..."
 print "  Counting the number of mis-classifications in the test set..."
 (pre_test_err, pre_test_crerr) = batchCountErrors(testImages, testTargets, 100)
 
+
 print
 print ' === Training model by minimizing cross entropy error === '
-maxepoch=10
+maxepoch = 7
 
 test_err = [0]*maxepoch
 train_err = [0]*maxepoch
@@ -139,7 +140,7 @@ for epoch in xrange(maxepoch):
         ### START:  Conjugate gradient with 3 linesearches
         max_iter = 3
 
-        if (epoch < 5):  # At first, we only update the final layer
+        if (epoch < 4):  # At first, we only update the final layer
             nn.minimizeLayer3(data, targets, max_iter)
         else:
             nn.minimizeAllLayers(data, targets, max_iter)
