@@ -1,4 +1,6 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 
 ## Copyright 2011, Wizcorp, www.wizcorp.jp
 
@@ -30,24 +32,28 @@ def backprop_only3(VV, Dim, inputs, targets):
     W = matrices[0]
     hB = matrices[1]
 
-    ## This is the last layer of the neural network, in bottom-up, 
-    ## "recognition" mode:
-    nnTargetOut = np.exp(np.dot(inputs, W) + hB)
-
-    # Normalize our outputs into probability distributions:
-    nnTargetOut = nnTargetOut / np.tile(nnTargetOut.sum(1)[:, np.newaxis], (1,10) )
+    # final layer is softmax, not logsig:
+    layer3out = np.exp( np.dot(inputs, W) + hB) #numpy auto-tiles hB
+    layer3out = layer3out / np.tile( layer3out.sum(1)[:, np.newaxis], (1,10) )
 
     # We use cross-entropy rather than squared error for our error function:
-    f = -(targets * np.log(nnTargetOut)).sum(0).sum(0)
+    # E for error
+    ## the ufldl.stanford.edu link calls this the "Cost" function J.
+    E = -(targets * np.log(layer3out)).sum(0).sum(0)
 
-    classError = nnTargetOut - targets
+    # Classification error:
+    # lowercase "delta" from Bishop, page 243, eq: 5.54:  
+    #      δ_k = y_k - t_k
+    d3 = layer3out - targets
 
     ## Flatten the gradients into the same shape as VV:
-    (df, Dim2) = multiFlatten((   np.dot(inputs.T, classError), 
-                                  classError.sum(0)[np.newaxis, :]  ))
+    (df, Dim2) = multiFlatten((   np.dot(inputs.T, d3), 
+                                  d3.sum(0)[np.newaxis, :]  ))
     assert Dim2 == Dim
 
-    return (f, df)
+    ## E is the cost function (J from ufldl.standford.edu)
+    ## df is the Jacobian of the cost function (the gradient of the cost function)
+    return (E, df)
 
 
 
@@ -73,38 +79,56 @@ def backprop(VV, Dim, inputs, targets):
     layer0out = actF(   np.dot(inputs,    W[0]) + hB[0]) #numpy auto-tiles hB
     layer1out = actF(   np.dot(layer0out, W[1]) + hB[1]) #numpy auto-tiles hB
     layer2out = actF(   np.dot(layer1out, W[2]) + hB[2]) #numpy auto-tiles hB
+
+    # final layer is softmax, not logsig:
     layer3out = np.exp( np.dot(layer2out, W[3]) + hB[3]) #numpy auto-tiles hB
-
-    targetout = layer3out
-
-    # Normalize our outputs into probability distributions:
-    targetout = targetout / np.tile( targetout.sum(1)[:, np.newaxis], (1,10) )
+    layer3out = layer3out / np.tile( layer3out.sum(1)[:, np.newaxis], (1,10) )
 
     # We use cross-entropy rather than squared error for our error function:
-    f = -(targets * np.log(targetout)).sum(0).sum(0)
+    # E for error
+    ## the ufldl.stanford.edu link calls this the "Cost" function J.
+    ## their version includes a weight decay term not listed here
+    E = -(targets * np.log(layer3out)).sum(0).sum(0)
+    # (... if both the targets and layer3out are normalized into probability distributions
+    #  (as they are here) then this is the multi-class cross-entropy)
 
     # Classification error:
-    Ix_class = targetout - targets
+    # lowercase "delta" from Bishop, page 243, eq: 5.54:  
+    #      δ_k = y_k - t_k
+    # the ufldl.stanford.edu page uses a simlar nomenclature, but their final
+    # layer is logsig, and they arrange the algebra a touch differently
+    d3 = layer3out - targets
 
-    # propagate the error back down the neural network ("backprop"):
-    deltaW3 = np.dot(layer2out.conj().T, Ix_class)
-    deltaHB3 = Ix_class.sum(0)[np.newaxis, :]
+    # According to the backprop algorithm, we can assign this much error to these weights:
+    deltaW3 = np.dot(layer2out.conj().T, d3)
+    deltaHB3 = d3.sum(0)[np.newaxis, :]
 
     ## For backprop, we take the derivative actF acting on the
     ## input data.  
     ## For the Logistic function, the derivative of actF(x) 
     ## is actF(x) * (1 - actF(x))
-    Ix3 = np.dot(Ix_class, W[3].T) * layer2out * (1-layer2out)
-    deltaW2 = np.dot(layer1out.T, Ix3)
-    deltaHB2 = Ix3.sum(0)[np.newaxis, :]
+    # dLogsig(x) is:  logsig(x) * (1-logsig(x))
+    # Since we already have that value, we just re-use it
+    # From Bishop, page 244, this is eq# 5.56:
+    #   δ_j = h'(a_j) Σ ( w_kj * δ_k )
+    # the ufldl.stanford.edu page:
+    #  d_ = (W * d ) * f'()
+    #     δ_j = h'(a_j) Σ ( w_kj * δ_k ) * f'(a_j)
+    # =>  δ_j =  np.dot( w_k, δ_k ) .* f'(a_j)
+    # =>  δ_j =  f'(a_j) .* np.dot( w_k, δ_k )
+    # =>  δ_j =  f(a_j) * (1-f(a_j)) .* np.dot( δ_k, w_k )
+    # which is what we have here:
+    d2 = layer2out * (1-layer2out) * np.dot(d3, W[3].T)
+    deltaW2 = np.dot(layer1out.T, d2)
+    deltaHB2 = d2.sum(0)[np.newaxis, :]
 
-    Ix2 = np.dot(Ix3, W[2].T) * layer1out * (1-layer1out)
-    deltaW1 = np.dot(layer0out.T, Ix2)
-    deltaHB1 = Ix2.sum(0)[np.newaxis, :]
+    d1 = layer1out * (1-layer1out) * np.dot(d2, W[2].T)
+    deltaW1 = np.dot(layer0out.T, d1)
+    deltaHB1 = d1.sum(0)[np.newaxis, :]
 
-    Ix1 = np.dot(Ix2, W[1].T) * layer0out * (1-layer0out)
-    deltaW0 = np.dot(inputs.T, Ix1)
-    deltaHB0 = Ix1.sum(0)[np.newaxis, :]
+    d0 = layer0out * (1-layer0out) * np.dot(d1, W[1].T)
+    deltaW0 = np.dot(inputs.T, d0)
+    deltaHB0 = d0.sum(0)[np.newaxis, :]
 
     ## Flatten the gradients into the same shape as VV:
     (df, Dim2) = multiFlatten(( deltaW0, deltaHB0, 
@@ -113,5 +137,7 @@ def backprop(VV, Dim, inputs, targets):
                                 deltaW3, deltaHB3 ))
     assert Dim2 == Dim
 
-    return (f, df)
+    ## E is the cost function (J from ufldl.standford.edu)
+    ## df is the Jacobian of the cost function (the gradient of the cost function)
+    return (E, df)
 
