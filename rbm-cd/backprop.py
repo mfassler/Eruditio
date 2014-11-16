@@ -46,9 +46,13 @@ def backprop_only3(VV, Dim, inputs, targets):
     #      δ_k = y_k - t_k
     d3 = layer3out - targets
 
+    deltaW3 = np.dot(inputs.T, d3)
+    deltaHB3 = d3.sum(0)[np.newaxis, :]
+
+
     ## Flatten the gradients into the same shape as VV:
-    (df, Dim2) = multiFlatten((   np.dot(inputs.T, d3), 
-                                  d3.sum(0)[np.newaxis, :]  ))
+    (df, Dim2) = multiFlatten(( deltaW3,
+                                deltaHB3 ))
     assert Dim2 == Dim
 
     ## E is the cost function (J from ufldl.standford.edu)
